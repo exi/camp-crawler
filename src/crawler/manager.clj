@@ -20,6 +20,7 @@
                           :writer nil
                           :stats {}
                           :stats-writer nil
+                          :cleaner nil
                           :index (clucy/disk-index "lucene.index")
                           :indexer nil
                           :index-input (as/chan 1000)}))
@@ -121,10 +122,15 @@
   (let [index-input (:index-input @state)
         index (:index @state)
         indexer (future (try (loop []
-                               (let [documents (as/<!! index-input)]
-                                 (log/info "indexing" (count documents) "documents")
-                                 (apply (partial clucy/delete index) documents)
-                                 (apply (partial clucy/add index) documents)
+                               (let [[cmd documents] (as/<!! index-input)]
+                                 (case cmd
+                                   :add (do
+                                          (log/info "indexing add" (count documents) "documents")
+                                          (apply (partial clucy/delete index) documents)
+                                          (apply (partial clucy/add index) documents))
+                                   :delete (do
+                                             (log/info "indexing delete" (count documents) "documents")
+                                             (apply (partial clucy/delete index) documents)))
                                  (recur)))
                              (catch Throwable e
                                (log/error "indexer died" e)
@@ -137,6 +143,29 @@
     (log/info "killing indexer")
     (future-cancel indexer))
   (swap! state assoc :indexer nil)
+  nil)
+
+(defn start-cleaner [state]
+  (let [index (:index @state)
+        store (:store @state)
+        cleaner (future (try (loop []
+                               (log/info "cleaner run")
+                               (dorun
+                                (for [[ip files] (util/get-old-files-from-store @store)]
+                                  (util/remove-files-from-store state ip files)))
+                               (Thread/sleep 60000)
+                               (recur))
+                             (catch Throwable e
+                               (log/error "cleaner died" e)
+                               e)))]
+    (swap! state assoc :cleaner cleaner)
+    nil))
+
+(defn stop-cleaner [state]
+  (when-let [cleaner (:cleaner @state)]
+    (log/info "killing cleaner")
+    (future-cancel cleaner))
+  (swap! state assoc :cleaner nil)
   nil)
 
 (defn schedule [state]
@@ -152,6 +181,7 @@
   (let [state (new-state)]
     (start-stats state)
     (start-indexer state)
+    (start-cleaner state)
     (import-store state)
     (start-writer state)
     (schedule state)
@@ -161,5 +191,6 @@
   (stop-crawlers state)
   (stop-writer state)
   (stop-stats state)
+  (stop-cleaner state)
   (stop-indexer state)
   nil)

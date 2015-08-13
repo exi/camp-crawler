@@ -4,6 +4,8 @@
             [clucy.core :as clucy]
             [cemerick.url :as cem-url]))
 
+(def max-age-millis (* 1000 60 60 3))
+
 (defn build-ftp-url [^String ip ^String path]
   (let [parts (string/split path #"/")]
     (apply str
@@ -38,4 +40,24 @@
 (defn add-files-to-store [state ip files]
   (swap! (:store @state) merge-files-into-store ip files)
   (let [files-with-url (map (partial add-url-to-file ip) files)]
-    (as/>!! (:index-input @state) files-with-url)))
+    (as/>!! (:index-input @state) [:add files-with-url])))
+
+(defn remove-files-from-store [state ip files]
+  (swap! state
+         (fn [old]
+           (assoc old
+                  ip
+                  (apply dissoc
+                         (get old ip)
+                         files))))
+  (let [files-with-url (map (partial add-url-to-file ip) files)]
+    (as/>!! (:index-input @state) [:delete files-with-url])))
+
+(defn get-old-files-from-store [store]
+  (into {}
+        (for [[ip files] store]
+          [ip (->> files
+                   (filter
+                    (fn [file]
+                      (let [timestamp (get file :crawl-timestamp 0)]
+                        (< timestamp (- (System/currentTimeMillis) max-age-millis))))))])))

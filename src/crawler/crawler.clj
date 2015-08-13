@@ -10,7 +10,8 @@
     (or (> depth 6) (re-find #"lost\+found" path))))
 
 (defn map-ftp-file [current-dir ^FTPFile f]
-  {:name (str current-dir (.getName f))
+  {:crawl-timestamp (System/currentTimeMillis)
+   :name (str current-dir (.getName f))
    :size (.getSize f)})
 
 (defn crawl [state ip]
