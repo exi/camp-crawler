@@ -6,6 +6,14 @@
 
 (def max-age-millis (* 1000 60 60 3))
 
+(defn new-file-set [& body]
+  (into (sorted-set-by
+         (fn [a b] (compare (:name a) (:name b))))
+        body))
+
+(defn new-store [& body]
+  (into {} (map (fn [k v] [k (new-file-set v)]) body)))
+
 (defn build-ftp-url [^String ip ^String path]
   (let [parts (string/split path #"/")]
     (apply str
@@ -30,17 +38,20 @@
     (sort-by :name x)))
 
 (defn merge-files-into-store [old ip items]
-  (let [paths (into #{} items)]
-    (assoc old ip (into (get old ip #{})
+  (let [paths (apply new-file-set items)]
+    (assoc old ip (into (get old ip (new-file-set))
                         paths))))
 
-(defn add-url-to-file [ip file]
-  (assoc file :url (build-ftp-url ip (:name file))))
+(defn modify-file-for-index [ip file]
+  (-> file
+      (assoc :url (build-ftp-url ip (:name file)))
+      (select-keys [:url :name :size])))
 
 (defn add-files-to-store [state ip files]
   (swap! (:store @state) merge-files-into-store ip files)
-  (let [files-with-url (map (partial add-url-to-file ip) files)]
-    (as/>!! (:index-input @state) [:add files-with-url])))
+  (let [files-with-url (map (partial modify-file-for-index ip) files)]
+    (when (seq files-with-url)
+      (as/>!! (:index-input @state) [:add files-with-url]))))
 
 (defn remove-files-from-store [state ip files]
   (swap! (:store @state)
@@ -49,8 +60,9 @@
              (if (seq new-files)
                (assoc old ip new-files)
                (dissoc old ip)))))
-  (let [files-with-url (map (partial add-url-to-file ip) files)]
-    (as/>!! (:index-input @state) [:delete files-with-url])))
+  (let [files-with-url (map (partial modify-file-for-index ip) files)]
+    (when (seq files-with-url)
+      (as/>!! (:index-input @state) [:delete files-with-url]))))
 
 (defn get-old-files-from-store [store]
   (into {}

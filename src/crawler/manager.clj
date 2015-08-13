@@ -16,7 +16,7 @@
 
 (defn new-state [] (atom {:ips #{}
                           :crawlers {}
-                          :store (atom {})
+                          :store (atom (util/new-store))
                           :writer nil
                           :stats {}
                           :stats-writer nil
