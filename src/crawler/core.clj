@@ -49,7 +49,7 @@
 
 (defn start []
   (reset! state (manager/start))
-  (dorun (map (partial manager/add-ip @state) (get-ftp-ips)))
+  (manager/set-ips @state (get-ftp-ips))
   (manager/schedule @state)
   (reset! server (api/start @state))
   nil)
@@ -64,7 +64,7 @@
   (loop []
     (Thread/sleep 60000)
     (try
-      (dorun (map (partial manager/add-ip @state) (get-ftp-ips)))
+      (manager/set-ips @state (get-ftp-ips))
       (catch Throwable e
         (log/error "error" e)))
     (manager/schedule @state)
