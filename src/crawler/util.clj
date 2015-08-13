@@ -43,13 +43,12 @@
     (as/>!! (:index-input @state) [:add files-with-url])))
 
 (defn remove-files-from-store [state ip files]
-  (swap! state
+  (swap! (:store @state)
          (fn [old]
-           (assoc old
-                  ip
-                  (apply dissoc
-                         (get old ip)
-                         files))))
+           (let [new-files (apply disj (get old ip) files)]
+             (if (seq new-files)
+               (assoc old ip new-files)
+               (dissoc old ip)))))
   (let [files-with-url (map (partial add-url-to-file ip) files)]
     (as/>!! (:index-input @state) [:delete files-with-url])))
 
