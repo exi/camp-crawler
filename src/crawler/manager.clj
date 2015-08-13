@@ -173,7 +173,7 @@
   (start-crawlers state)
   nil)
 
-(defn set-ips [state ip]
+(defn set-ips [state ips]
   (swap! state (fn [old] (assoc old :ips (into #{} ips))))
   nil)
 
