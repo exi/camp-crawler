@@ -10,7 +10,7 @@
             [crawler.util :as util]
             [crawler.api :as api]))
 
-(def wikipage "https://events.ccc.de/camp/2015/wiki/FTP")
+(def wikipage "https://events.ccc.de/camp/2015/wiki/File_sharing")
 
 (defn get-wikipage []
   (->> (java.net.URL. wikipage)
@@ -23,7 +23,7 @@
        (filter #(= "ftp://" (subs % 0 6)))))
 
 (defn extract-ftp-ip [url]
-  (if-let [match (re-matches #"ftp://(\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})" url)]
+  (if-let [match (re-matches #"ftp://([^/]+)/?.*" url)]
     (second match)
     nil))
 

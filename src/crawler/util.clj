@@ -4,7 +4,7 @@
             [clucy.core :as clucy]
             [cemerick.url :as cem-url]))
 
-(def max-age-millis (* 1000 60 60 3))
+(def max-age-millis (* 1000 60 60 8))
 
 (defn new-file-set [& body]
   (into (sorted-set-by
@@ -13,6 +13,10 @@
 
 (defn new-store [& body]
   (into {} (map (fn [k v] [k (new-file-set v)]) body)))
+
+(defn blacklisted-file? [file]
+  (let [{size :size} file]
+    (= 0 size)))
 
 (defn build-ftp-url [^String ip ^String path]
   (let [parts (string/split path #"/")]
@@ -45,13 +49,15 @@
 (defn modify-file-for-index [ip file]
   (-> file
       (assoc :url (build-ftp-url ip (:name file)))
-      (select-keys [:url :name :size])))
+      (assoc :ip ip)
+      (select-keys [:ip :url :name :size])))
 
 (defn add-files-to-store [state ip files]
-  (swap! (:store @state) merge-files-into-store ip files)
-  (let [files-with-url (map (partial modify-file-for-index ip) files)]
-    (when (seq files-with-url)
-      (as/>!! (:index-input @state) [:add files-with-url]))))
+  (let [filtered-files (remove blacklisted-file? files)]
+    (swap! (:store @state) merge-files-into-store ip filtered-files)
+    (let [files-with-url (map (partial modify-file-for-index ip) filtered-files)]
+      (when (seq files-with-url)
+        (as/>!! (:index-input @state) [:add files-with-url])))))
 
 (defn remove-files-from-store [state ip files]
   (swap! (:store @state)
